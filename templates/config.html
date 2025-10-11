@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}配置页面 - Aruba License Monitor{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-cog me-2"></i>系统配置
+                </h4>
+            </div>
+            <div class="card-body">
+                <form id="configForm">
+                    <!-- License Server 配置 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-primary">
+                                <i class="fas fa-server me-2"></i>License Server 配置
+                            </h5>
+                            <hr>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="controller_ip" class="form-label">License Server IP地址 *</label>
+                            <input type="text" class="form-control" id="controller_ip" name="controller_ip" 
+                                   value="{{ config.controller_ip or '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="username" class="form-label">用户名 *</label>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="{{ config.username or '' }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="password" class="form-label">密码 *</label>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   value="{{ config.password or '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="polling_interval" class="form-label">查询间隔 (分钟) *</label>
+                            <input type="number" class="form-control" id="polling_interval" name="polling_interval" 
+                                   value="{{ config.polling_interval or 86400 }}" min="1" required>
+                            <div class="form-text">默认86400分钟 (24小时)</div>
+                        </div>
+                    </div>
+
+                    <!-- SMTP 配置 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-primary">
+                                <i class="fas fa-envelope me-2"></i>SMTP 邮件配置
+                            </h5>
+                            <hr>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="smtp_enabled" name="smtp_enabled" 
+                                       {{ 'checked' if config.smtp_enabled else '' }}>
+                                <label class="form-check-label" for="smtp_enabled">
+                                    启用邮件通知
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="smtpConfig" style="display: none;">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="smtp_server" class="form-label">SMTP服务器</label>
+                                <input type="text" class="form-control" id="smtp_server" name="smtp_server" 
+                                       value="{{ config.smtp_server or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smtp_port" class="form-label">SMTP端口</label>
+                                <input type="number" class="form-control" id="smtp_port" name="smtp_port" 
+                                       value="{{ config.smtp_port or 587 }}">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="smtp_username" class="form-label">SMTP用户名</label>
+                                <input type="text" class="form-control" id="smtp_username" name="smtp_username" 
+                                       value="{{ config.smtp_username or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smtp_password" class="form-label">SMTP密码</label>
+                                <input type="password" class="form-control" id="smtp_password" name="smtp_password" 
+                                       value="{{ config.smtp_password or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="smtp_from" class="form-label">发件人邮箱</label>
+                                <input type="email" class="form-control" id="smtp_from" name="smtp_from" 
+                                       value="{{ config.smtp_from or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="smtp_to" class="form-label">收件人邮箱 (多个用逗号分隔)</label>
+                                <input type="text" class="form-control" id="smtp_to" name="smtp_to" 
+                                       value="{{ config.smtp_to or '' }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Syslog 配置 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-primary">
+                                <i class="fas fa-file-alt me-2"></i>Syslog 配置
+                            </h5>
+                            <hr>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="syslog_enabled" name="syslog_enabled" 
+                                       {{ 'checked' if config.syslog_enabled else '' }}>
+                                <label class="form-check-label" for="syslog_enabled">
+                                    启用Syslog通知
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="syslogConfig" style="display: none;">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="syslog_server" class="form-label">Syslog服务器</label>
+                                <input type="text" class="form-control" id="syslog_server" name="syslog_server" 
+                                       value="{{ config.syslog_server or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="syslog_port" class="form-label">Syslog端口</label>
+                                <input type="number" class="form-control" id="syslog_port" name="syslog_port" 
+                                       value="{{ config.syslog_port or 514 }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 通知设置 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="text-primary">
+                                <i class="fas fa-bell me-2"></i>通知设置
+                            </h5>
+                            <hr>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="enable_notifications" name="enable_notifications" 
+                                       {{ 'checked' if config.enable_notifications else '' }}>
+                                <label class="form-check-label" for="enable_notifications">
+                                    启用自动通知
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 保存按钮 -->
+                    <div class="row">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>保存配置
+                            </button>
+                            <button type="button" class="btn btn-secondary ms-2" onclick="resetForm()">
+                                <i class="fas fa-undo me-2"></i>重置
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 状态提示 -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="statusToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="fas fa-info-circle text-primary me-2"></i>
+            <strong class="me-auto">系统提示</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toastMessage">
+            配置已保存
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const smtpEnabled = document.getElementById('smtp_enabled');
+    const syslogEnabled = document.getElementById('syslog_enabled');
+    const smtpConfig = document.getElementById('smtpConfig');
+    const syslogConfig = document.getElementById('syslogConfig');
+    const configForm = document.getElementById('configForm');
+    const statusToast = document.getElementById('statusToast');
+    const toastMessage = document.getElementById('toastMessage');
+
+    // 显示/隐藏SMTP配置
+    function toggleSmtpConfig() {
+        smtpConfig.style.display = smtpEnabled.checked ? 'block' : 'none';
+    }
+
+    // 显示/隐藏Syslog配置
+    function toggleSyslogConfig() {
+        syslogConfig.style.display = syslogEnabled.checked ? 'block' : 'none';
+    }
+
+    // 初始化显示状态
+    toggleSmtpConfig();
+    toggleSyslogConfig();
+
+    // 绑定事件
+    smtpEnabled.addEventListener('change', toggleSmtpConfig);
+    syslogEnabled.addEventListener('change', toggleSyslogConfig);
+
+    // 表单提交
+    configForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        console.log('表单提交开始');
+        
+        // 创建FormData对象
+        const formData = new FormData(configForm);
+        
+        // 手动添加复选框状态
+        formData.set('smtp_enabled', smtpEnabled.checked ? 'on' : '');
+        formData.set('syslog_enabled', syslogEnabled.checked ? 'on' : '');
+        formData.set('enable_notifications', document.getElementById('enable_notifications').checked ? 'on' : '');
+        
+        console.log('发送的数据:');
+        for (let [key, value] of formData.entries()) {
+            console.log(key + ': ' + value);
+        }
+        
+        axios.post('/api/config', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        })
+            .then(response => {
+                console.log('服务器响应:', response.data);
+                if (response.data.status === 'success') {
+                    showToast('配置保存成功', 'success');
+                } else {
+                    showToast('保存失败: ' + response.data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('请求失败:', error);
+                showToast('保存失败: ' + error.message, 'error');
+            });
+    });
+
+    // 显示提示消息
+    function showToast(message, type) {
+        toastMessage.textContent = message;
+        const toast = new bootstrap.Toast(statusToast);
+        toast.show();
+    }
+
+    // 重置表单
+    window.resetForm = function() {
+        if (confirm('确定要重置所有配置吗？')) {
+            configForm.reset();
+            toggleSmtpConfig();
+            toggleSyslogConfig();
+        }
+    };
+});
+</script>
+{% endblock %}
