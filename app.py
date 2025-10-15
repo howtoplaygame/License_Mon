@@ -19,6 +19,8 @@ import datetime
 import threading
 import smtplib
 import socket
+import fcntl
+import tempfile
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, List, Optional
@@ -37,6 +39,8 @@ license_data = {}         # 存储License使用数据
 polling_thread = None     # 后台轮询线程对象
 polling_active = False    # 轮询状态标志
 notification_manager = None  # 通知管理器对象
+active_threads = set()    # 跟踪活跃的轮询线程ID
+lock_file_path = os.path.join(tempfile.gettempdir(), 'aruba_license_monitor.lock')
 
 # 确保数据目录存在
 os.makedirs('data', exist_ok=True)
@@ -187,6 +191,32 @@ class NotificationManager:
 notification_manager = NotificationManager()
 
 
+def acquire_polling_lock():
+    """获取轮询锁，防止重复启动"""
+    try:
+        # 尝试创建并锁定文件
+        lock_file = open(lock_file_path, 'w')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file.write(str(os.getpid()))
+        lock_file.flush()
+        return lock_file
+    except (IOError, OSError):
+        # 锁已被其他进程持有
+        return None
+
+
+def release_polling_lock(lock_file):
+    """释放轮询锁"""
+    if lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
+            if os.path.exists(lock_file_path):
+                os.remove(lock_file_path)
+        except:
+            pass
+
+
 def load_config():
     """
     加载配置文件
@@ -281,7 +311,34 @@ def polling_worker():
     """
     global polling_active, license_data, config_data
     
+    # 获取文件锁，防止重复启动
+    lock_file = acquire_polling_lock()
+    if not lock_file:
+        print("轮询线程已在其他进程中运行，退出当前线程")
+        return
+    
     print(f"轮询线程启动，轮询间隔: {config_data.get('polling_interval', 86400)} 分钟")
+    
+    # 防止重复启动的检查
+    if not polling_active:
+        print("轮询线程已停止，退出")
+        release_polling_lock(lock_file)
+        return
+    
+    # 添加线程ID用于调试和跟踪
+    import threading
+    thread_id = threading.current_thread().ident
+    print(f"轮询线程ID: {thread_id}")
+    
+    # 检查是否已有相同线程在运行
+    if thread_id in active_threads:
+        print(f"警告: 线程 {thread_id} 已在运行中，退出重复线程")
+        release_polling_lock(lock_file)
+        return
+    
+    # 注册当前线程
+    active_threads.add(thread_id)
+    print(f"注册轮询线程: {thread_id}")
     
     while polling_active:
         try:
@@ -325,6 +382,11 @@ def polling_worker():
         except Exception as e:
             print(f"轮询异常: {e}")
             time.sleep(60)  # 出错时等待1分钟再重试
+    
+    # 轮询线程结束时清理
+    print(f"轮询线程 {thread_id} 结束，清理线程跟踪")
+    active_threads.discard(thread_id)
+    release_polling_lock(lock_file)
 
 
 def check_license_alerts(license_data: Dict[str, Any]):
@@ -573,6 +635,11 @@ def save_config_api():
             'enable_notifications': request.form.get('enable_notifications') == 'on'
         }
         
+        # 保留现有的告警设置，避免丢失
+        if 'alert_settings' in config_data:
+            new_config['alert_settings'] = config_data['alert_settings']
+            print(f"保留现有告警设置: {config_data['alert_settings']}")
+        
         print(f"解析后的配置: {new_config}")
         
         # 更新全局配置数据
@@ -607,11 +674,27 @@ def save_config_api():
                 config_data['syslog_port']
             )
         
-        # 启动轮询
-        if config_data.get('controller_ip') and not polling_active:
+        # 重启轮询线程以应用新配置
+        if config_data.get('controller_ip'):
+            if polling_active:
+                print("停止现有轮询线程以应用新配置...")
+                polling_active = False
+                if polling_thread and polling_thread.is_alive():
+                    polling_thread.join(timeout=5)  # 等待最多5秒
+                
+                # 释放文件锁，允许新线程启动
+                print("释放轮询锁...")
+                if os.path.exists(lock_file_path):
+                    try:
+                        os.remove(lock_file_path)
+                    except:
+                        pass
+            
+            print("启动新的轮询线程...")
             polling_active = True
             polling_thread = threading.Thread(target=polling_worker, daemon=True)
             polling_thread.start()
+            print(f"轮询线程已重启，新间隔: {config_data.get('polling_interval', 86400)} 分钟")
         
         return jsonify({"status": "success", "message": "配置保存成功"})
         
@@ -807,11 +890,14 @@ if __name__ == '__main__':
     # 加载配置
     load_config()
     
-    # 如果配置了控制器信息，启动轮询
-    if config_data.get('controller_ip'):
+    # 如果配置了控制器信息，启动轮询（仅在应用启动时）
+    if config_data.get('controller_ip') and not polling_active:
         polling_active = True
         polling_thread = threading.Thread(target=polling_worker, daemon=True)
         polling_thread.start()
+        print("应用启动时轮询线程已启动")
+    elif polling_active:
+        print("轮询线程已在运行中，跳过启动")
     
     # 启动Web应用
     app.run(host='0.0.0.0', port=5005, debug=True)
